@@ -148,8 +148,8 @@ int U_TAPAccessShiftIR (int numberofbits, byte* pTDIBits, byte* pTDOBits)
   nTMSBits[0] = 0x3; // TMS sequence 1100
   U_TAPAccessShiftRaw(4, nTMSBits, 0, 0, SHIFTRAW_OPTION_NONE);
 
-  // read ID code and leave Shift-DR state with last bit
-  U_TAPAccessShiftRaw(numberofbits, 0, 0, pTDIBits, SHIFTRAW_OPTION_LASTTMS_ONE);
+  // send in IR command and leave Shift-IR state with last bit
+  U_TAPAccessShiftRaw(numberofbits, 0, pTDIBits, 0, SHIFTRAW_OPTION_LASTTMS_ONE);
 
   // return to Run-Test/Idle
   nTMSBits[0] = 0x1; // TMS sequence 10
@@ -167,6 +167,8 @@ int U_TAPAccessIdle (void)
 
   nTMSBits[0] = 0x1f; // TMS sequence: 1 1 1 1 1 0
   U_TAPAccessShiftRaw(6, nTMSBits, 0, 0, SHIFTRAW_OPTION_NONE);
+
+  return 0;
 }
 
 int GetDAPID()
@@ -176,6 +178,26 @@ int GetDAPID()
   int nIDCode = 0;
 
   U_TAPAccessIdle();
+
+  U_TAPAccessShiftDR(32, 0, nTDOBits);
+
+  nIDCode = ((int)nTDOBits[3]<< 24) | ((int)nTDOBits[2]<<16) |
+            ((int)nTDOBits[1]<<8)    | (int)nTDOBits[0];
+
+  return nIDCode;
+}
+
+int GetDAPID2()
+{
+  byte nTDIBits[4];
+  byte nTDOBits[4];
+
+  int nIDCode = 0;
+
+  U_TAPAccessIdle();
+  
+  nTDIBits[0] = 0x0E; // TMS sequence: 1110
+  U_TAPAccessShiftIR(4, nTDIBits, 0);
 
   U_TAPAccessShiftDR(32, 0, nTDOBits);
 
@@ -206,6 +228,13 @@ void loop() {
     {
       int nIDCode = 0;  
       nIDCode = GetDAPID();
+      Serial.print(" > DAP ID: ");
+      Serial.println(nIDCode, HEX);
+    }
+    else if (incoming == "getid2\n") 
+    {
+      int nIDCode = 0;  
+      nIDCode = GetDAPID2();
       Serial.print(" > DAP ID: ");
       Serial.println(nIDCode, HEX);
     }    
