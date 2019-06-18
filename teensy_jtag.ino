@@ -132,7 +132,7 @@ int U_TAPAccessShiftDR (int numberofbits, byte* pTDIBits, byte* pTDOBits)
   U_TAPAccessShiftRaw(3, nTMSBits, 0, 0, SHIFTRAW_OPTION_NONE);
 
   // read ID code and leave Shift-DR state with last bit
-  U_TAPAccessShiftRaw(32, 0, 0, pTDOBits, SHIFTRAW_OPTION_LASTTMS_ONE);
+  U_TAPAccessShiftRaw(numberofbits, 0, 0, pTDOBits, SHIFTRAW_OPTION_LASTTMS_ONE);
 
   // return to Run-Test/Idle
   nTMSBits[0] = 0x1; // TMS sequence 10
@@ -140,23 +140,42 @@ int U_TAPAccessShiftDR (int numberofbits, byte* pTDIBits, byte* pTDOBits)
   return 0;
 }
 
-int GetDAPID()
+int U_TAPAccessShiftIR (int numberofbits, byte* pTDIBits, byte* pTDOBits)
 {
   byte nTMSBits[4];
+
+  // move TAP controller to Shift-IR state
+  nTMSBits[0] = 0x3; // TMS sequence 1100
+  U_TAPAccessShiftRaw(4, nTMSBits, 0, 0, SHIFTRAW_OPTION_NONE);
+
+  // read ID code and leave Shift-DR state with last bit
+  U_TAPAccessShiftRaw(numberofbits, 0, 0, pTDIBits, SHIFTRAW_OPTION_LASTTMS_ONE);
+
+  // return to Run-Test/Idle
+  nTMSBits[0] = 0x1; // TMS sequence 10
+  U_TAPAccessShiftRaw(2, nTMSBits, 0, 0, SHIFTRAW_OPTION_NONE);
+  return 0;
+}
+
+//
+// TAP Controller may be in unknown state,
+// reset via TMS and move to Run-test/IDLE
+//
+int U_TAPAccessIdle (void)
+{
+  byte nTMSBits[4];
+
+  nTMSBits[0] = 0x1f; // TMS sequence: 1 1 1 1 1 0
+  U_TAPAccessShiftRaw(6, nTMSBits, 0, 0, SHIFTRAW_OPTION_NONE);
+}
+
+int GetDAPID()
+{
   byte nTDOBits[4];
 
   int nIDCode = 0;
 
-  nTMSBits[0] = 0x1f; // TMS sequence: 1 1 1 1 1 0
-  U_TAPAccessShiftRaw(6, nTMSBits, 0, 0, SHIFTRAW_OPTION_NONE);
-
-//  nTMSBits[0] = 0x1; // TMS sequence 100
-//  U_TAPAccessShiftRaw(3, nTMSBits, 0, 0, SHIFTRAW_OPTION_NONE);
-//  
-//  U_TAPAccessShiftRaw(32, 0, 0, nTDOBits, SHIFTRAW_OPTION_LASTTMS_ONE);
-//
-//  nTMSBits[0] = 0x1; // TMS sequence 10
-//  U_TAPAccessShiftRaw(2, nTMSBits, 0, 0, SHIFTRAW_OPTION_NONE);
+  U_TAPAccessIdle();
 
   U_TAPAccessShiftDR(32, 0, nTDOBits);
 
