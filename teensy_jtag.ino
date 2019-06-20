@@ -22,7 +22,7 @@ void setup() {
   delay(500);
 
   Serial.println("Power On");
-  Serial.println("Avaliable commands: getid");
+  Serial.println("Avaliable commands: getid get_ap0idr");
 }
 
 // Don´t care
@@ -67,12 +67,12 @@ int U_TAPAccessShiftRaw (int numberofbits, byte* pTMSBits,
         if (getbit(pTDIBits, i))
         {
           digitalWrite(PIN_TDI, HIGH);
-          Serial.print("1 ");
+          //Serial.print("1 ");
         }
         else
         {
           digitalWrite(PIN_TDI, LOW);
-          Serial.print("0 ");
+          //Serial.print("0 ");
         }
     }
 //    else
@@ -118,7 +118,7 @@ int U_TAPAccessShiftRaw (int numberofbits, byte* pTMSBits,
     delay(5);
   }
 
-  Serial.println("");
+  //Serial.println("");
   return 0;
 }
 
@@ -174,6 +174,46 @@ int U_TAPAccessIdle (void)
   return 0;
 }
 
+// byte str 5 bytes long
+int accreg2fields (byte* bytestr, int* pValue, int* pStatus)
+{
+  int i = 0;
+
+  *pStatus = 0;
+  
+  for (i = 0; i < 3; i++)
+  {
+    setbit((byte*)pStatus, i, getbit(bytestr, i));
+  }
+
+  *pValue = 0;
+  
+  for (i = 0; i < 32; i++)
+  {
+    setbit((byte*)pValue, i, getbit(bytestr, i + 3));
+  }
+  
+  return 0;
+}
+
+// byte str 5 bytes long
+int fields2accreg (byte* bytestr, int value, int A32, int RnW)
+{
+  int i = 0;
+  memset(bytestr, 0, 5);
+
+  setbit(bytestr, 0, getbit((byte*)&RnW, 0));
+  setbit(bytestr, 1, getbit((byte*)&A32, 0));
+  setbit(bytestr, 2, getbit((byte*)&A32, 1));
+
+  for (i = 3; i < 35; i++)
+  {
+    setbit(bytestr, i, getbit((byte*)&value, i - 3));
+  }
+  
+  return 0;
+}
+
 int GetDAPID()
 {
   byte nTDOBits[4];
@@ -199,7 +239,7 @@ int GetDAPID2()
 
   U_TAPAccessIdle();
   
-  nTDIBits[0] = 0xE; // IDCODE: 1110
+  nTDIBits[0] = 0xE; // IDCODE: 0b1110
   U_TAPAccessShiftIR(4, nTDIBits, 0);
 
   U_TAPAccessShiftDR(32, 0, nTDOBits);
@@ -210,40 +250,18 @@ int GetDAPID2()
   return nIDCode;
 }
 
-int test (void)
+int get_ap0idr (void)
 {
   byte nTDIBits[5] = {0};
   byte nTDOBits[5] = {0};
 
+  int AP_IDR = 0;
+  int status = 0;
+
   U_TAPAccessIdle();
   
-  nTDIBits[0] = 0xA; // DPACC: 1010
+  nTDIBits[0] = 0xA; // DPACC: 0b1010
   U_TAPAccessShiftIR(4, nTDIBits, 0);
-
-//  // Write 0x50000000 to DP.CTRL/STAT register
-//  // CTRL/STAT A[3:2] 01
-//  // RnW  Write 0
-//  nTDIBits[0] = 0x2;
-//  nTDIBits[1] = 0;
-//  nTDIBits[2] = 0;
-//  nTDIBits[3] = 0x8;
-//  nTDIBits[4] = 0x2;
-//  U_TAPAccessShiftDR(35, nTDIBits, 0);
-//
-//  // Write 0x50000000 to the DP.CTRL/STAT register
-//  // poll the DP.CTRL/STAT register for 0xf0000000
-//  // actually, I got 0x30000000, says CSYSPWRUPREQ and CSYSPWRUPACK unset, 
-//  // CDBGPWRUPREQ and CDBGPWRUPACK set
-//
-//  Serial.println(" > Test write DP CTRL/STAT DATAIN 0x50000000, A[3:2] 01, W");
-//  U_TAPAccessShiftDR(35, 0, nTDOBits);
-//
-//  Serial.print(" > Test read DP CTRL/STAT: ");
-//  for (int i = 4; i >= 0; i--)
-//  {
-//    Serial.print(nTDOBits[i], HEX);
-//  }
-//  Serial.println("");
 
 
   // write 0x0 to the DP.SELECT register to activatie the AP
@@ -260,7 +278,7 @@ int test (void)
   
 
   //
-  nTDIBits[0] = 0xB; // APACC: 1011
+  nTDIBits[0] = 0xB; // APACC: 0b1011
   U_TAPAccessShiftIR(4, nTDIBits, 0);
 
   // A[3:2] 11  the forth register IDR
@@ -272,18 +290,58 @@ int test (void)
   nTDIBits[4] = 0x0;
   U_TAPAccessShiftDR(35, nTDIBits, 0);
 
-  Serial.println(" > Test write DP.SELECT APACC");
+  Serial.println(" > Write DP.SELECT APACC");
   
   U_TAPAccessShiftDR(35, 0, nTDOBits);
 
-  Serial.print(" > Test read AP IDR: ");
-  for (int i = 4; i >= 0; i--)
-  {
-    Serial.print(nTDOBits[i], HEX);
-    Serial.print(" ");
-  }
-  Serial.println("");
+  accreg2fields(nTDOBits, &AP_IDR, &status);
   
+  Serial.print(" > AP IDR: ");
+  Serial.print(AP_IDR, HEX);
+  Serial.print("  status: ");
+  Serial.println(status, HEX);
+  
+  return 0;
+}
+
+int readmem()
+{
+  byte nTDIBits[5] = {0};
+  byte nTDOBits[5] = {0};
+
+  int value = 0;
+  int status = 0;
+
+  U_TAPAccessIdle();
+  
+  nTDIBits[0] = 0xA; // DPACC: 0b1010
+  U_TAPAccessShiftIR(4, nTDIBits, 0);
+  
+  // Write 0x50000000 to DP.CTRL/STAT register
+  // CTRL/STAT A[3:2] 01
+  // RnW  Write 0
+  fields2accreg(nTDIBits, 0x50000000, 0x1, 0x0);
+
+//  Serial.println(" > TDIBits: ");
+//  for (int i = 4; i >= 0; i--)
+//  {
+//    Serial.print(nTDIBits[i], HEX);
+//    Serial.print(" ");
+//  }
+//  Serial.println("");
+  
+  U_TAPAccessShiftDR(35, nTDIBits, 0);
+
+  Serial.println(" > Write DP.CTRL/STAT DATAIN 0x50000000, A[3:2] 01, W");
+  U_TAPAccessShiftDR(35, 0, nTDOBits);
+
+  accreg2fields(nTDOBits, &value, &status);
+
+  Serial.print(" > DP.CTRL/STAT: ");
+  Serial.print(value, HEX);
+  Serial.print("  status: ");
+  Serial.println(status, HEX);
+
   return 0;
 }
 
@@ -294,7 +352,7 @@ int dp_rdbuff (void)
 
   U_TAPAccessIdle();
   
-  nTDIBits[0] = 0xA; // DPACC: 1010
+  nTDIBits[0] = 0xA; // DPACC: 0b1010
   U_TAPAccessShiftIR(4, nTDIBits, 0);
 
   //
@@ -324,15 +382,50 @@ int dp_dpidr (void)
   byte nTDIBits[5];
   byte nTDOBits[5];
 
+  int value = 0;
+  int status = 0;
+
   U_TAPAccessIdle();
   
-  nTDIBits[0] = 0xA; // DPACC: 1010
+  nTDIBits[0] = 0xA; // DPACC: 0b1010
   U_TAPAccessShiftIR(4, nTDIBits, 0);
 
   //
   // DPIDR A[3:2] 0
   // RnW  READ 1
-  nTDIBits[0] = 0x1;
+
+  fields2accreg(nTDIBits, 0x0, 0x0, 0x1);
+  U_TAPAccessShiftDR(35, nTDIBits, 0);
+
+  U_TAPAccessShiftDR(35, 0, nTDOBits);
+
+  accreg2fields(nTDOBits, &value, &status);
+
+  Serial.print(" > DP.DPIDR: ");
+  Serial.print(value, HEX);
+  Serial.print("  status: ");
+  Serial.println(status, HEX);
+  
+  return 0;
+}
+
+int dp_ctrl (void)
+{
+  byte nTDIBits[5];
+  byte nTDOBits[5];
+
+  int value = 0;
+  int status = 0;
+
+  U_TAPAccessIdle();
+  
+  nTDIBits[0] = 0xA; // DPACC: 0b1010
+  U_TAPAccessShiftIR(4, nTDIBits, 0);
+
+  //
+  // DPIDR A[3:2] 01
+  // RnW  READ 1
+  nTDIBits[0] = 0x3;
   nTDIBits[1] = 0;
   nTDIBits[2] = 0;
   nTDIBits[3] = 0x0;
@@ -341,7 +434,14 @@ int dp_dpidr (void)
 
   U_TAPAccessShiftDR(35, 0, nTDOBits);
 
-  Serial.println(" > Test read DP.DPIDR");
+  accreg2fields(nTDOBits, &value, &status);
+
+  Serial.print(" > DP.CTRL/STAT: ");
+  Serial.print(value, HEX);
+  Serial.print("  status: ");
+  Serial.println(status, HEX);
+
+  Serial.println(" > Test read DP.CTRL");
   for (int i = 4; i >= 0; i--)
   {
     Serial.print(nTDOBits[i], HEX);
@@ -350,7 +450,6 @@ int dp_dpidr (void)
   
   return 0;
 }
-
 
 void loop() {
   // put your main code here, to run repeatedly:
@@ -383,17 +482,25 @@ void loop() {
       Serial.print(" > DAP ID: ");
       Serial.println(nIDCode, HEX);
     }  
-    else if (incoming == "test\n") 
+    else if (incoming == "get_ap0idr\n") 
     { 
-      test();
+      get_ap0idr();
     }
     else if (incoming == "dp_rdbuff\n")
     {
-        dp_rdbuff();
+      dp_rdbuff();
     }
     else if (incoming == "dp_dpidr\n")
     {
-        dp_dpidr();
+      dp_dpidr();
+    }
+    else if (incoming == "dp_ctrl\n")
+    {
+      dp_ctrl();
+    }
+    else if (incoming == "readmem\n")
+    {
+        readmem();
     }
     else 
     {
