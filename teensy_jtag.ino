@@ -22,7 +22,7 @@ void setup() {
   delay(500);
 
   Serial.println("Power On");
-  Serial.println("Avaliable commands: getid get_ap0idr");
+  Serial.println("Avaliable commands: getid   get_ap0idr   readmem");
 }
 
 // Don´t care
@@ -214,6 +214,44 @@ int fields2accreg (byte* bytestr, int value, int A32, int RnW)
   return 0;
 }
 
+
+
+void GetArg(char* commAndline,int* Argc,char* Argv[],int  mAxArgc)
+{
+  int length;
+  int i = 0;
+  int index = 0;
+  length = strlen(commAndline);
+  Argv[index] = commAndline;
+  index++;
+  for(i = 0;i < length;i++){
+    if(commAndline[i] == ' ' && commAndline[i+1] != ' ' && commAndline[i+1] != '\0'){
+      commAndline[i] = '\0';//breAk up
+      i++;
+      while(commAndline[i] == ' ' && i<length){
+        i++;
+      }
+      if(index < mAxArgc){        //////////////处理最大参数个数 只取前mAxArgc个参数
+        Argv[index] = commAndline + i;
+        index ++;
+      }                 ////////////////////////
+      if(commAndline[i] == '"'){   /////////////////////这段是对"的处理
+        commAndline[i] = '\0';
+        Argv[index-1] = (char*)Argv[index-1]+1;
+        while(commAndline[i] != '"' && i<length){
+          i++;
+        }
+        if (commAndline[i] == '"'){
+          commAndline[i] = '\0';
+          i--;
+        }
+      }//if                                //////////////
+    }
+
+  }
+  *Argc = index;
+}
+
 int GetDAPID()
 {
   byte nTDOBits[4];
@@ -304,7 +342,7 @@ int get_ap0idr (void)
   return 0;
 }
 
-int readmem()
+int readmem(int address)
 {
   byte nTDIBits[5] = {0};
   byte nTDOBits[5] = {0};
@@ -338,6 +376,109 @@ int readmem()
   accreg2fields(nTDOBits, &value, &status);
 
   Serial.print(" > DP.CTRL/STAT: ");
+  Serial.print(value, HEX);
+  Serial.print("  status: ");
+  Serial.println(status, HEX);
+
+  // DP.APSEL 0, BANK 0, WRITE 0
+  fields2accreg(nTDIBits, 0x0, 0x2, 0x0);
+  U_TAPAccessShiftDR(35, nTDIBits, 0);
+
+  nTDIBits[0] = 0xB; // APACC: 0b1011
+  U_TAPAccessShiftIR(4, nTDIBits, 0);
+
+  // AP.CSW 0 WRITE 0
+  fields2accreg(nTDIBits, 0x22000012, 0x0, 0x0);
+  U_TAPAccessShiftDR(35, nTDIBits, 0);
+
+
+  // AP.TAR 1 WRITE 0
+  // address
+  fields2accreg(nTDIBits, address, 0x1, 0x0);
+  U_TAPAccessShiftDR(35, nTDIBits, 0);
+
+  // AP.DRW 0x3 READ 1
+  fields2accreg(nTDIBits, 0x0, 0x3, 0x1);
+  U_TAPAccessShiftDR(35, nTDIBits, 0);
+
+  U_TAPAccessShiftDR(35, 0, nTDOBits);
+
+  accreg2fields(nTDOBits, &value, &status);
+  
+  Serial.print(" > address 0x");
+  Serial.print(address, HEX);
+  Serial.print(": ");
+  Serial.print(value, HEX);
+  Serial.print("  status: ");
+  Serial.println(status, HEX);
+
+  return 0;
+}
+
+int writemem()
+{
+  byte nTDIBits[5] = {0};
+  byte nTDOBits[5] = {0};
+
+  int value = 0;
+  int status = 0;
+
+  U_TAPAccessIdle();
+  
+  nTDIBits[0] = 0xA; // DPACC: 0b1010
+  U_TAPAccessShiftIR(4, nTDIBits, 0);
+  
+  // Write 0x50000000 to DP.CTRL/STAT register
+  // CTRL/STAT A[3:2] 01
+  // RnW  Write 0
+  fields2accreg(nTDIBits, 0x50000000, 0x1, 0x0);
+
+//  Serial.println(" > TDIBits: ");
+//  for (int i = 4; i >= 0; i--)
+//  {
+//    Serial.print(nTDIBits[i], HEX);
+//    Serial.print(" ");
+//  }
+//  Serial.println("");
+  
+  U_TAPAccessShiftDR(35, nTDIBits, 0);
+
+  Serial.println(" > Write DP.CTRL/STAT DATAIN 0x50000000, A[3:2] 01, W");
+  U_TAPAccessShiftDR(35, 0, nTDOBits);
+
+  accreg2fields(nTDOBits, &value, &status);
+
+  Serial.print(" > DP.CTRL/STAT: ");
+  Serial.print(value, HEX);
+  Serial.print("  status: ");
+  Serial.println(status, HEX);
+
+  // DP.APSEL 0, BANK 0, WRITE 0
+  fields2accreg(nTDIBits, 0x0, 0x2, 0x0);
+  U_TAPAccessShiftDR(35, nTDIBits, 0);
+
+  nTDIBits[0] = 0xB; // APACC: 0b1011
+  U_TAPAccessShiftIR(4, nTDIBits, 0);
+
+  // AP.CSW 0 WRITE 0
+  fields2accreg(nTDIBits, 0x22000012, 0x0, 0x0);
+  U_TAPAccessShiftDR(35, nTDIBits, 0);
+
+
+  // AP.TAR 1 WRITE 0
+  // address 0
+  fields2accreg(nTDIBits, 0x0, 0x1, 0x0);
+  U_TAPAccessShiftDR(35, nTDIBits, 0);
+
+  // AP.DRW 0x3 WRITE 0  data: 0xFF
+  fields2accreg(nTDIBits, 0xFF, 0x3, 0x0);
+  U_TAPAccessShiftDR(35, nTDIBits, 0);
+
+  U_TAPAccessShiftDR(35, 0, nTDOBits);
+
+  accreg2fields(nTDOBits, &value, &status);
+  
+  Serial.print(" > address 0: ");
   Serial.print(value, HEX);
   Serial.print("  status: ");
   Serial.println(status, HEX);
@@ -394,7 +535,7 @@ int dp_dpidr (void)
   // DPIDR A[3:2] 0
   // RnW  READ 1
 
-  fields2accreg(nTDIBits, 0x0, 0x0, 0x1);
+  fields2accreg(nTDIBits, 0x50000000, 0x0, 0x1);
   U_TAPAccessShiftDR(35, nTDIBits, 0);
 
   U_TAPAccessShiftDR(35, 0, nTDOBits);
@@ -451,9 +592,14 @@ int dp_ctrl (void)
   return 0;
 }
 
+#define MAX_COMMAND_LENGTH  128
+
 void loop() {
   // put your main code here, to run repeatedly:
   String incoming = "";   // for incoming serial string data
+  char command[MAX_COMMAND_LENGTH + 1] = {0};
+  int argc = 0;
+  char* argv[9] = {0};
 
   delay(1000);
   digitalWrite(PIN_LED, HIGH);
@@ -466,41 +612,63 @@ void loop() {
     // read the incoming:
     incoming = Serial.readString();
     // say what you got:
-    Serial.print(incoming);  
+    Serial.print(incoming);
+
+    if (incoming.length() > MAX_COMMAND_LENGTH)
+    {
+      Serial.println(" > invalid command.");
+      return;
+    }
+
+    incoming.toCharArray(command, MAX_COMMAND_LENGTH);
+
+    if ('\n' == command[strlen(command) - 1]) command[strlen(command) - 1] =0;
+    GetArg(command, &argc, argv, 9);
       
-    if (incoming == "getid\n") 
+    if (0 == stricmp(argv[0], "getid"))
     {
       int nIDCode = 0;  
       nIDCode = GetDAPID();
       Serial.print(" > DAP ID: ");
       Serial.println(nIDCode, HEX);
     }
-    else if (incoming == "getid2\n") 
+    else if (0 == stricmp(argv[0], "getid2")) 
     {
       int nIDCode = 0;  
       nIDCode = GetDAPID2();
       Serial.print(" > DAP ID: ");
       Serial.println(nIDCode, HEX);
     }  
-    else if (incoming == "get_ap0idr\n") 
+    else if (0 == stricmp(argv[0], "get_ap0idr"))
     { 
       get_ap0idr();
     }
-    else if (incoming == "dp_rdbuff\n")
+    else if (0 == stricmp(argv[0], "dp_rdbuff"))
     {
       dp_rdbuff();
     }
-    else if (incoming == "dp_dpidr\n")
+    else if (0 == stricmp(argv[0], "dp_dpidr"))
     {
       dp_dpidr();
     }
-    else if (incoming == "dp_ctrl\n")
+    else if (0 == stricmp(argv[0], "dp_ctrl"))
     {
       dp_ctrl();
     }
-    else if (incoming == "readmem\n")
+    else if (0 == stricmp(argv[0], "readmem"))
     {
-        readmem();
+      if (2 != argc)
+      {
+        Serial.println(" > invalid parameters.  e.g. readmem <addr>");
+      }
+      else
+      {
+        readmem(strtoul(argv[1], NULL, 0));
+      }  
+    }
+    else if (0 == stricmp(argv[0], "writemem"))
+    {
+        writemem();
     }
     else 
     {
