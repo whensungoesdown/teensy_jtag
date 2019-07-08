@@ -21,8 +21,13 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
-  Serial.println("Power On");
-  Serial.println("Avaliable commands: getid   get_ap0idr   readmem");
+  Serial.println("Power On\n");
+  Serial.println("Avaliable commands:\n"
+                  "    getid\n"
+                  "    get_ap0idr\n"
+                  "    readmem <address>\n"
+                  "    writemem <address> <value>\n\n"
+                  "#\n");
 }
 
 // Don´t care
@@ -349,6 +354,8 @@ int readmem(int address)
 
   int value = 0;
   int status = 0;
+  
+  char formatbuf[64] = {0};
 
   U_TAPAccessIdle();
   
@@ -404,24 +411,22 @@ int readmem(int address)
   U_TAPAccessShiftDR(35, 0, nTDOBits);
 
   accreg2fields(nTDOBits, &value, &status);
-  
-  Serial.print(" > address 0x");
-  Serial.print(address, HEX);
-  Serial.print(": ");
-  Serial.print(value, HEX);
-  Serial.print("  status: ");
-  Serial.println(status, HEX);
+
+  sprintf(formatbuf, " > address 0x%x: 0x%08x, status 0x%x\n", address, value, status);
+  Serial.println(formatbuf);
 
   return 0;
 }
 
-int writemem()
+int writemem(int address, int value)
 {
   byte nTDIBits[5] = {0};
   byte nTDOBits[5] = {0};
 
-  int value = 0;
+  int retvalue = 0;
   int status = 0;
+
+  char formatbuf[64] = {0};
 
   U_TAPAccessIdle();
   
@@ -446,10 +451,10 @@ int writemem()
   Serial.println(" > Write DP.CTRL/STAT DATAIN 0x50000000, A[3:2] 01, W");
   U_TAPAccessShiftDR(35, 0, nTDOBits);
 
-  accreg2fields(nTDOBits, &value, &status);
+  accreg2fields(nTDOBits, &retvalue, &status);
 
   Serial.print(" > DP.CTRL/STAT: ");
-  Serial.print(value, HEX);
+  Serial.print(retvalue, HEX);
   Serial.print("  status: ");
   Serial.println(status, HEX);
 
@@ -466,22 +471,17 @@ int writemem()
 
 
   // AP.TAR 1 WRITE 0
-  // address 0
-  fields2accreg(nTDIBits, 0x0, 0x1, 0x0);
+  // address
+  fields2accreg(nTDIBits, address, 0x1, 0x0);
   U_TAPAccessShiftDR(35, nTDIBits, 0);
 
-  // AP.DRW 0x3 WRITE 0  data: 0xFF
-  fields2accreg(nTDIBits, 0xFF, 0x3, 0x0);
+  // AP.DRW 0x3 WRITE 0  data: value
+  fields2accreg(nTDIBits, value, 0x3, 0x0);
   U_TAPAccessShiftDR(35, nTDIBits, 0);
 
-  U_TAPAccessShiftDR(35, 0, nTDOBits);
-
-  accreg2fields(nTDOBits, &value, &status);
+  sprintf(formatbuf, " > address 0x%x: 0x%08x, status 0x%x\n", address, value, status);
   
-  Serial.print(" > address 0: ");
-  Serial.print(value, HEX);
-  Serial.print("  status: ");
-  Serial.println(status, HEX);
+  Serial.println(formatbuf);
 
   return 0;
 }
@@ -668,7 +668,14 @@ void loop() {
     }
     else if (0 == stricmp(argv[0], "writemem"))
     {
-        writemem();
+      if (3 != argc)
+      {
+        Serial.println(" > invalid parameters.  e.g. writemem <addr> <value>");
+      }
+      else
+      {
+        writemem(strtoul(argv[1], NULL, 0), strtoul(argv[2], NULL, 0));
+      }
     }
     else 
     {
@@ -676,7 +683,8 @@ void loop() {
       Serial.println(" > invalid command.");
       incoming = "";
     } 
-    
+
+    Serial.print("#");
     Serial.flush(); 
   } 
 
