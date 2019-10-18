@@ -1,7 +1,12 @@
-#define PIN_TDI 5
-#define PIN_TDO 6
-#define PIN_TCK 7
-#define PIN_TMS 8
+//#define PIN_TDI 5
+//#define PIN_TDO 6
+//#define PIN_TCK 7
+//#define PIN_TMS 8
+
+#define PIN_TDO 5
+#define PIN_TMS 6
+#define PIN_TDI 7
+#define PIN_TCK 8
 
 #define PIN_LED 13
 
